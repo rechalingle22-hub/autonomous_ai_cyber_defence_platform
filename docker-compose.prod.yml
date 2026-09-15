@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  cyberdefense-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyberdefense-backend-prod
+    restart: always
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - APP_NAME=Autonomous AI Cyber Defense Platform
+      - DATABASE_URL=postgresql+asyncpg://cyberdefense:securesoc2026@cyberdefense-db:5432/cyberdefense_soc
+      - REDIS_URL=redis://cyberdefense-redis:6379/0
+      - JWT_SECRET_KEY=prod-carrier-grade-autonomous-ai-soc-secret-key-change-in-prod
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - ML_MODEL_DIR=/app/ml/artifacts
+      - CORS_ORIGINS=["http://localhost", "http://localhost:80", "https://cyberdefense.internal"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - platform-data:/app/data
+      - platform-logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4096M
+        reservations:
+          cpus: '1.0'
+          memory: 1024M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      - cyberdefense-db
+      - cyberdefense-redis
+
+  cyberdefense-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cyberdefense-frontend-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      cyberdefense-backend:
+        condition: service_healthy
+
+  cyberdefense-db:
+    image: postgres:16-alpine
+    container_name: cyberdefense-db-prod
+    restart: always
+    environment:
+      - POSTGRES_USER=cyberdefense
+      - POSTGRES_PASSWORD=securesoc2026
+      - POSTGRES_DB=cyberdefense_soc
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyberdefense -d cyberdefense_soc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cyberdefense-redis:
+    image: redis:7-alpine
+    container_name: cyberdefense-redis-prod
+    restart: always
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres-data:
+  redis-data:
+  platform-data:
+  platform-logs:
+
